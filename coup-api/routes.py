@@ -1,10 +1,25 @@
+import sys
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException
 
 from action import ALL_ACTIONS
 from store import STATE_STACK, RESOLVER
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "agents"))
+
+from base import AgentAPIError
+from gemini_agent import GeminiAgent
+from gpt_agent import GPTAgent
+
 # Initialize the router with a standard API prefix
 router = APIRouter(prefix="/api/v1", tags=["states"])
+
+AGENT_CLASSES = {
+    "gpt": GPTAgent,
+    "openai": GPTAgent,
+    "gemini": GeminiAgent,
+}
 
 
 def _resolve_and_push(state, action):
@@ -35,8 +50,18 @@ async def get_latest_state():
     return {"success": True, "data": STATE_STACK.get_states()[-1]}
 
 @router.get("/states/private-view")
-async def get_private_view(payload: dict):
+async def get_private_view(player_id: int):
     """Gets players private view"""
+    return {"success": True, "data": STATE_STACK.private_view({"player_id": player_id})}
+
+@router.get("/states/private-view/{player_id}")
+async def get_private_view_by_path(player_id: int):
+    """Gets a player's private view by path parameter."""
+    return {"success": True, "data": STATE_STACK.private_view({"player_id": player_id})}
+
+@router.post("/states/private-view")
+async def post_private_view(payload: dict):
+    """Gets a player's private view using a JSON body."""
     return {"success": True, "data": STATE_STACK.private_view(payload)}
 
 @router.post("/states")
@@ -195,3 +220,104 @@ async def select_card(payload: dict):
 
     new_state = RESOLVER.apply_selection({"state": state, **payload})
     return {"success": True, "id": new_state.turn_id, "data": new_state}
+
+def _get_agent(agent_name: str):
+    agent_cls = AGENT_CLASSES.get(agent_name)
+    if not agent_cls:
+        raise HTTPException(status_code=404, detail=f"Unknown agent: {agent_name}")
+    try:
+        return agent_cls()
+    except AgentAPIError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+async def _dispatch_agent_decision(player_id: int, decision: dict):
+    command = decision["command"]
+
+    if command == "declare":
+        payload = {"player_id": player_id, "action": decision["action"]}
+        if "target_player_id" in decision:
+            payload["target_player_id"] = decision["target_player_id"]
+        return await declare_action(payload)
+
+    if command == "respond":
+        return await respond_to_action({"player_id": player_id, "response": decision["response"]})
+
+    if command == "select_card":
+        payload = {"player_id": player_id}
+        if "card" in decision:
+            payload["card"] = decision["card"]
+        if "keep_cards" in decision:
+            payload["keep_cards"] = decision["keep_cards"]
+        return await select_card(payload)
+
+    if command == "noop":
+        return {"success": True, "data": STATE_STACK.get_states()[-1]}
+
+    raise HTTPException(status_code=400, detail=f"Unknown agent command: {command}")
+
+@router.get("/agents")
+async def list_agents():
+    return {
+        "success": True,
+        "data": {
+            "gpt": {"provider": "openai", "model": GPTAgent.model},
+            "gemini": {
+                "provider": "gemini",
+                "model": GeminiAgent.model,
+                "thinking_level": "high",
+            },
+        },
+    }
+
+@router.post("/agents/{agent_name}/decision")
+async def agent_decision(agent_name: str, payload: dict):
+    """
+    Ask an LLM agent for the next move using only STATE_STACK.private_view().
+
+    Expected payload: {"player_id": int, "include_private_view": bool?}
+    """
+    player_id = payload.get("player_id")
+    if player_id is None:
+        raise HTTPException(status_code=400, detail="player_id is required")
+
+    private_view = STATE_STACK.private_view({"player_id": player_id})
+    agent = _get_agent(agent_name)
+    try:
+        result = agent.decide(private_view)
+    except AgentAPIError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if payload.get("include_private_view", False):
+        result["private_view"] = private_view
+    return {"success": True, "data": result}
+
+@router.post("/agents/{agent_name}/act")
+async def agent_act(agent_name: str, payload: dict):
+    """
+    Ask an LLM agent for a move using private_view(), then submit that move to
+    the existing action route for the current game phase.
+
+    Expected payload: {"player_id": int, "include_private_view": bool?}
+    """
+    player_id = payload.get("player_id")
+    if player_id is None:
+        raise HTTPException(status_code=400, detail="player_id is required")
+
+    private_view = STATE_STACK.private_view({"player_id": player_id})
+    agent = _get_agent(agent_name)
+    try:
+        result = agent.decide(private_view)
+    except AgentAPIError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    route_result = await _dispatch_agent_decision(player_id, result["decision"])
+    data = {
+        "agent": result,
+        "route_result": route_result,
+    }
+    if not payload.get("include_private_view", False):
+        data["agent"].pop("private_view", None)
+    else:
+        data["agent"]["private_view"] = private_view
+
+    return {"success": True, "data": data}
