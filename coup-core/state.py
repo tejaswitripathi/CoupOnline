@@ -34,6 +34,8 @@ class State():
             self.deck = self.build_deck()
             self.create_game()
 
+        self.num_cards_per_player = {p.id: len(p.cards) for p in self.players}
+
     def build_deck(self) -> list[str]:
         deck = random.shuffle(["Duke", "Captain", "Assassin", "Contessa", "Ambassador"] * 3)
         return deck
