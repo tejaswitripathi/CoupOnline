@@ -29,7 +29,24 @@ class State():
         self.turn_id = turn_id
         self.deck = deck
         self.phase = phase
-        
+        self.victim_id = victim_id
+        self.discard_pile = discard_pile
+
+        # Tracks the action awaiting a block/challenge response, who still needs
+        # to respond, and the outcome of that response window once it's decided.
+        self.pending_action: str | None = None
+        self.pending_responses: set[int] = set()
+        self.blocked: int = 0
+        self.challenged: int = 0
+        self.challenger_id: int | None = None
+        self.blocker_id: int | None = None
+
+        # Queue of pending player choices (losing influence, or picking which
+        # cards to keep after an Exchange) that must be resolved one at a time
+        # before the resolver can finish a turn. See resolver.py's
+        # generate_next_state / apply_selection.
+        self.pending_selections: list[dict] = []
+
         if turn_id == 0:
             self.deck = self.build_deck()
             self.create_game()

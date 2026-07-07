@@ -1,5 +1,4 @@
 import copy
-import random
 
 from state import State
 from action import Action, ALL_ACTIONS
@@ -32,6 +31,8 @@ class Resolver():
             state.discard_pile = []
         if not hasattr(state, "victim_id"):
             state.victim_id = None
+        if not hasattr(state, "pending_selections"):
+            state.pending_selections = []
         state.num_cards_per_player = {p.id: len(p.cards) for p in state.players}
 
     def _card_name(self, card) -> str:
@@ -112,66 +113,119 @@ class Resolver():
             assert attacker.num_coins >= 3, "Player needs at least 3 coins to assassinate."
             attacker.num_coins -= 3
 
-    def _exchange(self, state: State, player: Player, payload: dict | None = None) -> None:
+    def _queue_exchange(self, state: State, player: Player) -> dict | None:
         hand_size = len(player.cards)
         if hand_size == 0:
-            return
+            return None
 
         prefer_object = any(hasattr(card, "name") for card in player.cards)
-        drawn_cards = [
-            self._card_for_player(player, state.draw_card(), prefer_object)
-            for _ in range(min(2, len(state.deck)))
-        ]
-        available_cards = list(player.cards) + drawn_cards
+        num_draw = min(2, len(state.deck))
+        drawn_names = [state.draw_card() for _ in range(num_draw)]
+        candidates = [self._card_name(card) for card in player.cards] + drawn_names
 
-        keep_names = None
-        if payload:
-            keep_names = payload.get("exchange_keep_cards") or payload.get("keep_cards")
+        return {
+            "kind": "exchange",
+            "player_id": player.id,
+            "candidates": candidates,
+            "keep_count": hand_size,
+            "prefer_object": prefer_object,
+        }
 
-        keep_indices = set()
-        if keep_names:
-            keep_names = list(keep_names)
-            for keep_name in keep_names:
-                for index, card in enumerate(available_cards):
-                    if index not in keep_indices and self._card_name(card) == keep_name:
-                        keep_indices.add(index)
-                        break
-            assert len(keep_indices) == hand_size, "Exchange must keep one card per remaining influence."
-        else:
-            keep_indices = set(random.sample(range(len(available_cards)), hand_size))
-
-        kept_cards = [card for index, card in enumerate(available_cards) if index in keep_indices]
-        returned_cards = [card for index, card in enumerate(available_cards) if index not in keep_indices]
-        player.cards = kept_cards
-        for card in returned_cards:
-            state.shuffle_card(self._card_name(card))
-
-        state.num_cards_per_player[player.id] = len(player.cards)
-
-    def resolve_actions(self, action, player_a, player_b, state, payload: dict | None = None):
+    def _queue_resolve_actions(self, state: State, action: Action, attacker: Player, victim: Player | None) -> list[dict]:
+        """Apply an action's immediate (non-choice) effects, and return any player
+        choices (influence loss, exchange) that must be resolved before this
+        action is fully applied."""
         if action.name == "Income":
-            player_a.num_coins += 1
+            attacker.num_coins += 1
         elif action.name == "Foreign Aid":
-            player_a.num_coins += 2
+            attacker.num_coins += 2
         elif action.name == "Tax":
-            player_a.num_coins += 3
-        elif action.name == "Coup":
-            self._lose_influence(state, player_b)
-        elif action.name == "Assassinate":
-            self._lose_influence(state, player_b)
+            attacker.num_coins += 3
+        elif action.name in ("Coup", "Assassinate"):
+            return [{"kind": "lose_influence", "player_id": victim.id}]
         elif action.name == "Steal":
-            stolen_coins = min(2, player_b.num_coins)
-            player_b.num_coins -= stolen_coins
-            player_a.num_coins += stolen_coins
+            stolen_coins = min(2, victim.num_coins)
+            victim.num_coins -= stolen_coins
+            attacker.num_coins += stolen_coins
         elif action.name == "Exchange":
-            self._exchange(state, player_a, payload)
+            selection = self._queue_exchange(state, attacker)
+            return [selection] if selection else []
 
-        return
+        return []
 
     def _get_player(self, players_dict: dict[int, Player], player_id: int | None, role: str) -> Player:
         assert player_id is not None, f"{role} is required for this resolution."
         assert player_id in players_dict, f"Unknown {role}: {player_id}"
         return players_dict[player_id]
+
+    def _advance_or_pause(self, state: State, selections: list[dict]) -> State:
+        """Queue up `selections`, skipping any influence-loss entries for players
+        who are already eliminated, then either pause for the next choice or
+        finish the turn if nothing is left to decide."""
+        state.pending_selections = list(selections)
+
+        while state.pending_selections:
+            selection = state.pending_selections[0]
+            if selection["kind"] == "lose_influence":
+                player = state.get_players_dict()[selection["player_id"]]
+                if not player.cards:
+                    state.pending_selections.pop(0)
+                    continue
+            break
+
+        if not state.pending_selections:
+            return self.base_state_builder(state)
+
+        state.phase = "AWAITING_CARD_SELECTION"
+        return state
+
+    def apply_selection(self, payload: dict) -> State:
+        """
+        Continue a resolution paused in AWAITING_CARD_SELECTION.
+
+        Payload:
+        - state: the in-progress State (already in AWAITING_CARD_SELECTION)
+        - player_id: the player making the choice (must match the pending selection)
+        - card: <card name> -- required when the pending selection is "lose_influence"
+        - keep_cards: [<card name>, ...] -- required when the pending selection is "exchange"
+        """
+        state = payload["state"]
+        assert state.phase == "AWAITING_CARD_SELECTION", f"No selection pending; phase is {state.phase}"
+        assert state.pending_selections, "No pending selection to resolve."
+
+        selection = state.pending_selections[0]
+        player_id = payload.get("player_id")
+        assert player_id == selection["player_id"], "It is not this player's turn to choose."
+
+        player = state.get_players_dict()[player_id]
+
+        if selection["kind"] == "lose_influence":
+            card_name = payload.get("card")
+            card = self._find_card(player, {card_name}) if card_name is not None else None
+            assert card is not None, f"Player does not hold {card_name}."
+            self._lose_influence(state, player, card)
+
+        elif selection["kind"] == "exchange":
+            keep_names = list(payload.get("keep_cards") or [])
+            assert len(keep_names) == selection["keep_count"], (
+                f"Must keep exactly {selection['keep_count']} card(s)."
+            )
+            remaining = list(selection["candidates"])
+            kept = []
+            for name in keep_names:
+                assert name in remaining, f"{name} is not an available exchange candidate."
+                remaining.remove(name)
+                kept.append(self._card_for_player(player, name, selection.get("prefer_object", True)))
+
+            player.cards = kept
+            for name in remaining:
+                state.shuffle_card(name)
+            state.num_cards_per_player[player.id] = len(player.cards)
+
+        else:
+            raise AssertionError(f"Unknown selection kind: {selection['kind']}")
+
+        return self._advance_or_pause(state, state.pending_selections[1:])
 
     def generate_next_state(self, payload: dict) -> State:
 
@@ -216,6 +270,8 @@ class Resolver():
 
         self._pay_for_action_attempt(action, attacker)
 
+        selections: list[dict] = []
+
         if blocked:
             assert action.name in self.BLOCK_CLAIMS, f"{action.name} cannot be blocked."
             if challenged:
@@ -223,30 +279,27 @@ class Resolver():
                 block_claims = self.BLOCK_CLAIMS[action.name]
 
                 if self._player_has_claim(blocker, block_claims):
-                    challenger = self._get_player(players_dict, challenger_id, "challenger_id")
-                    self._lose_influence(state, challenger)
+                    selections.append({"kind": "lose_influence", "player_id": challenger_id})
                     self._reveal_and_replace(state, blocker, block_claims)
-                    return self.base_state_builder(state)
+                else:
+                    selections.append({"kind": "lose_influence", "player_id": blocker_id})
+                    selections += self._queue_resolve_actions(state, action, attacker, victim)
+            # else: block stands unchallenged -- action does not happen.
 
-                self._lose_influence(state, blocker)
-                self.resolve_actions(action, attacker, victim, state, payload)
-                return self.base_state_builder(state)
-
-            return self.base_state_builder(state)
-
-        if challenged:
+        elif challenged:
             action_claims = self.ACTION_CLAIMS.get(action.name)
             assert action_claims is not None, f"{action.name} cannot be challenged."
             challenger = self._get_player(players_dict, challenger_id, "challenger_id")
 
             if self._player_has_claim(attacker, action_claims):
-                self._lose_influence(state, challenger)
+                selections.append({"kind": "lose_influence", "player_id": challenger.id})
                 self._reveal_and_replace(state, attacker, action_claims)
-                self.resolve_actions(action, attacker, victim, state, payload)
-                return self.base_state_builder(state)
+                selections += self._queue_resolve_actions(state, action, attacker, victim)
+            else:
+                selections.append({"kind": "lose_influence", "player_id": attacker.id})
+                # bluff caught -- action does not happen.
 
-            self._lose_influence(state, attacker)
-            return self.base_state_builder(state)
+        else:
+            selections += self._queue_resolve_actions(state, action, attacker, victim)
 
-        self.resolve_actions(action, attacker, victim, state, payload)
-        return self.base_state_builder(state)
+        return self._advance_or_pause(state, selections)
