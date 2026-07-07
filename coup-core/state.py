@@ -37,11 +37,13 @@ class State():
         self.num_cards_per_player = {p.id: len(p.cards) for p in self.players}
 
     def build_deck(self) -> list[str]:
-        deck = random.shuffle(["Duke", "Captain", "Assassin", "Contessa", "Ambassador"] * 3)
+        deck = ["Duke", "Captain", "Assassin", "Contessa", "Ambassador"] * 3
+        random.shuffle(deck)
         return deck
-    
+
     def shuffle_card(self, card: str) -> None:
-        self.deck = random.shuffle(self.deck + [card])
+        self.deck.append(card)
+        random.shuffle(self.deck)
 
     def draw_card(self) -> str:
         return self.deck.pop(0)
@@ -54,7 +56,8 @@ class State():
             player.cards = self.deck[:2]
             self.deck.pop(0)
             self.deck.pop(0)
-        self.acting_player_id = random.sample(range(len(self.players)), 1)[0].id
+        starting_index = random.sample(range(len(self.players)), 1)[0]
+        self.acting_player_id = self.players[starting_index].id
         self.phase = "AWAITING_ACTION"
 
     def get_players_dict(self) -> dict:
