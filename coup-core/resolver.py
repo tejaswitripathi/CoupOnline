@@ -15,6 +15,10 @@ class Resolver():
         "Exchange": {"Ambassador"},
     }
 
+    FORBIDDEN_ACTION_CLAIMS = {
+        "Foreign Aid": {"Duke"},
+    }
+
     BLOCK_CLAIMS = {
         "Foreign Aid": {"Duke"},
         "Steal": {"Captain", "Ambassador"},
@@ -287,6 +291,16 @@ class Resolver():
             # else: block stands unchallenged -- action does not happen.
 
         elif challenged:
+            forbidden_claims = self.FORBIDDEN_ACTION_CLAIMS.get(action.name)
+            if forbidden_claims is not None:
+                challenger = self._get_player(players_dict, challenger_id, "challenger_id")
+                if self._player_has_claim(attacker, forbidden_claims):
+                    selections.append({"kind": "lose_influence", "player_id": attacker.id})
+                else:
+                    selections.append({"kind": "lose_influence", "player_id": challenger.id})
+                    selections += self._queue_resolve_actions(state, action, attacker, victim)
+                return self._advance_or_pause(state, selections)
+
             action_claims = self.ACTION_CLAIMS.get(action.name)
             assert action_claims is not None, f"{action.name} cannot be challenged."
             challenger = self._get_player(players_dict, challenger_id, "challenger_id")

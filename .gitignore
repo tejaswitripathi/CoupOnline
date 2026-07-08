@@ -2,4 +2,3 @@
 */__pycache__
 coup-core/*.txt
 .venv
-database/*.txt

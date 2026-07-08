@@ -25,6 +25,11 @@ one concise sentence of public strategic rationale:
 
 Prefer actions that improve your chance to win, but stay valid for the current
 phase and player.
+
+Rule notes for this game variant:
+- Players holding Duke cannot take Foreign Aid.
+- Foreign Aid can be challenged; a challenge means "I think you have Duke."
+- Foreign Aid can also be blocked by a player claiming Duke.
 """
 
 
