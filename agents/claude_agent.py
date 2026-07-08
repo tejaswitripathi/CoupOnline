@@ -9,7 +9,7 @@ except ImportError:
 
 class ClaudeAgent(CoupLLMAgent):
     provider = "anthropic"
-    model = "claude-sonnet-5"
+    model = "claude-haiku-4-5"
 
     def __init__(self, api_key: str | None = None):
         self.api_key = api_key or get_env_value("ANTHROPIC_API_KEY") or get_env_value("CLAUDE_API_KEY")
