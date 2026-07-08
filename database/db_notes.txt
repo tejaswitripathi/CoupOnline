@@ -1,0 +1,51 @@
+TABLES:
+
+Game:
+game_id bigint PK, index
+
+State:
+state_id bigint PK, index
+game_id bigint FK to Game.game_id
+turn_id int
+phase varchar
+player_ids json
+acting_player_id int
+deck json
+discard_pile json
+victim_id int?
+blocked boolean?
+challenged boolean?
+blocker_id int?
+challenger_id int?
+
+Decision:
+decision_id bigint PK, index
+game_id bigint FK to Game.game_id
+state_id bigint FK to State.state_id
+player_id int
+decision_type varchar       // in ['declare', 'response', 'select_card', 'noop']
+action varchar              // if decision_type == 'declare' --> action in ['Income', 'Tax',...]
+                            //  elif decision_type == 'response' --> action in ['pass', 'challenge', 'block']
+                            //  elif decision_type == 'select_card' --> action in ['Exchange', 'card_selection']
+claimed_card varchar
+is_bluff boolean?
+target_player_id int?
+resolved_successfully boolean?
+legal_actions json?
+raw_decision json?
+
+PlayerSnapshot:
+state_id bigint PK, FK to State.state_id
+player_id int PK
+(state_id, player_id) PK
+player_name varchar
+cards json
+num_coins int
+active boolean
+
+Result:
+game_id bigint PK, FK to Game.game_id
+winner_name varchar
+winner_id int
+total_turns bigint
+total_states bigint

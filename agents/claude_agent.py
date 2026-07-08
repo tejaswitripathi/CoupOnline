@@ -22,6 +22,7 @@ class ClaudeAgent(CoupLLMAgent):
         except ImportError as exc:
             raise AgentAPIError("The anthropic package is required to use the Claude agent.") from exc
         self._client = anthropic.Anthropic(api_key=self.api_key)
+        self._use_thinking = "haiku" not in self.model
 
     def _json_text(self, value) -> str | None:
         if not value or callable(value):
@@ -60,21 +61,26 @@ class ClaudeAgent(CoupLLMAgent):
 
         return None
 
+    def _thinking_not_supported(self, error: Exception) -> bool:
+        return "adaptive thinking is not supported" in str(error).lower()
+
     def _call_once(self, private_view: dict) -> str | None:
-        response = self._client.messages.create(
-            model=self.model,
-            max_tokens=4096,
-            system=SYSTEM_PROMPT,
-            thinking={"type": "adaptive"},
-            output_config={
-                "effort": "high",
+        request = {
+            "model": self.model,
+            "max_tokens": 4096,
+            "system": SYSTEM_PROMPT,
+            "output_config": {
                 "format": {
                     "type": "json_schema",
                     "schema": DECISION_SCHEMA,
                 },
             },
-            messages=[{"role": "user", "content": self.build_user_prompt(private_view)}],
-        )
+            "messages": [{"role": "user", "content": self.build_user_prompt(private_view)}],
+        }
+        if self._use_thinking:
+            request["thinking"] = {"type": "enabled"}
+
+        response = self._client.messages.create(**request)
         return self._extract_text(response)
 
     def _call_model(self, private_view: dict) -> str:
@@ -87,6 +93,9 @@ class ClaudeAgent(CoupLLMAgent):
                 last_error = "Claude response did not include text output."
             except Exception as exc:
                 last_error = exc
+                if self._use_thinking and self._thinking_not_supported(exc):
+                    self._use_thinking = False
+                    continue
 
             if attempt < 2:
                 time.sleep(2 ** attempt)
