@@ -64,7 +64,7 @@ class ClaudeAgent(CoupLLMAgent):
     def _thinking_not_supported(self, error: Exception) -> bool:
         return "adaptive thinking is not supported" in str(error).lower()
 
-    def _call_once(self, private_view: dict) -> str | None:
+    def _call_once(self, private_view: dict, retry_error: str | None = None) -> str | None:
         request = {
             "model": self.model,
             "max_tokens": 4096,
@@ -75,7 +75,7 @@ class ClaudeAgent(CoupLLMAgent):
                     "schema": DECISION_SCHEMA,
                 },
             },
-            "messages": [{"role": "user", "content": self.build_user_prompt(private_view)}],
+            "messages": [{"role": "user", "content": self.build_user_prompt(private_view, retry_error=retry_error)}],
         }
         if self._use_thinking:
             request["thinking"] = {"type": "enabled"}
@@ -83,11 +83,11 @@ class ClaudeAgent(CoupLLMAgent):
         response = self._client.messages.create(**request)
         return self._extract_text(response)
 
-    def _call_model(self, private_view: dict) -> str:
+    def _call_model(self, private_view: dict, retry_error: str | None = None) -> str:
         last_error = None
         for attempt in range(3):
             try:
-                text = self._call_once(private_view)
+                text = self._call_once(private_view, retry_error=retry_error)
                 if text:
                     return text
                 last_error = "Claude response did not include text output."

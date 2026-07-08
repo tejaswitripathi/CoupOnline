@@ -13,11 +13,11 @@ class GeminiAgent(CoupLLMAgent):
         if not self.api_key:
             raise AgentAPIError("GEMINI_API_KEY is required in the environment or .env to use the Gemini agent.")
 
-    def _call_model(self, private_view: dict) -> str:
+    def _call_model(self, private_view: dict, retry_error: str | None = None) -> str:
         payload = {
             "model": self.model,
             "system_instruction": SYSTEM_PROMPT,
-            "input": self.build_user_prompt(private_view),
+            "input": self.build_user_prompt(private_view, retry_error=retry_error),
             "generation_config": {
                 "thinking_level": "high",
                 "temperature": 0.7,

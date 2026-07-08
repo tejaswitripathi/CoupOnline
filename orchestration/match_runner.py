@@ -213,6 +213,7 @@ def run_match(
                     "model": decision_result["model"],
                     "decision": decision_result["decision"],
                     "thoughts": decision_result.get("thoughts"),
+                    "fallback": decision_result.get("fallback", False),
                 },
                 "state": _state_observation(game_id),
             }

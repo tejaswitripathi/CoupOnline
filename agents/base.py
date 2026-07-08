@@ -227,33 +227,93 @@ def normalize_decision(decision: dict, private_view: dict) -> dict:
     raise AgentAPIError(f"Unknown agent command: {command}")
 
 
+def safe_fallback_decision(private_view: dict) -> dict:
+    legal_next = private_view.get("legal_next", {})
+
+    selection = legal_next.get("selection")
+    if selection:
+        if selection["kind"] == "lose_influence":
+            return {"command": "select_card", "card": selection["cards"][0]}
+        if selection["kind"] == "exchange":
+            return {
+                "command": "select_card",
+                "keep_cards": selection["candidates"][:selection["keep_count"]],
+            }
+
+    responses = legal_next.get("responses") or []
+    if responses:
+        return {"command": "respond", "response": "pass"}
+
+    declarations = legal_next.get("declarations") or []
+    for preferred_action in ("Coup", "Income", "Foreign Aid", "Tax", "Exchange", "Steal", "Assassinate"):
+        for declaration in declarations:
+            if declaration["action"] != preferred_action:
+                continue
+            decision = {"command": "declare", "action": preferred_action}
+            if declaration.get("requires_target"):
+                targets = declaration.get("valid_target_ids") or []
+                if targets:
+                    decision["target_player_id"] = targets[0]
+            return decision
+
+    return {"command": "noop"}
+
+
 class CoupLLMAgent:
     provider = None
     model = None
 
-    def build_user_prompt(self, private_view: dict) -> str:
+    def build_user_prompt(self, private_view: dict, retry_error: str | None = None) -> str:
         return json.dumps(
             {
                 "task": "Choose the next Coup command for this player.",
+                "important": (
+                    "Return one command from private_view.legal_next exactly. "
+                    "There is no provider-side chat memory; use private_view.history for previous turns."
+                ),
+                "retry_error": retry_error,
                 "private_view": private_view,
             },
             sort_keys=True,
         )
 
-    def decide(self, private_view: dict) -> dict:
-        raw_output = self._call_model(private_view)
+    def _parse_decision_result(self, raw_output: str, private_view: dict) -> dict:
         raw_decision = _extract_json_object(raw_output)
         thoughts = raw_decision.get("thoughts")
         if thoughts is not None and not isinstance(thoughts, str):
             thoughts = json.dumps(thoughts)
-        decision = normalize_decision(raw_decision, private_view)
         return {
-            "provider": self.provider,
-            "model": self.model,
-            "decision": decision,
+            "decision": normalize_decision(raw_decision, private_view),
             "thoughts": thoughts,
             "raw_output": raw_output,
         }
 
-    def _call_model(self, private_view: dict) -> str:
+    def decide(self, private_view: dict) -> dict:
+        retry_error = None
+        raw_output = None
+        for attempt in range(2):
+            try:
+                raw_output = self._call_model(private_view, retry_error=retry_error)
+                parsed = self._parse_decision_result(raw_output, private_view)
+                return {
+                    "provider": self.provider,
+                    "model": self.model,
+                    **parsed,
+                    "fallback": False,
+                }
+            except AgentAPIError as exc:
+                retry_error = str(exc)
+                if attempt == 0:
+                    continue
+
+        return {
+            "provider": self.provider,
+            "model": self.model,
+            "decision": safe_fallback_decision(private_view),
+            "thoughts": f"I returned an illegal move twice, so the runner used a safe legal fallback: {retry_error}",
+            "raw_output": raw_output,
+            "fallback": True,
+        }
+
+    def _call_model(self, private_view: dict, retry_error: str | None = None) -> str:
         raise NotImplementedError

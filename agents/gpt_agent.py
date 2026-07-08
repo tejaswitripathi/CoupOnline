@@ -13,12 +13,12 @@ class GPTAgent(CoupLLMAgent):
         if not self.api_key:
             raise AgentAPIError("OPENAI_API_KEY is required in the environment or .env to use the GPT agent.")
 
-    def _call_model(self, private_view: dict) -> str:
+    def _call_model(self, private_view: dict, retry_error: str | None = None) -> str:
         payload = {
             "model": self.model,
             "reasoning": {"effort": "high"},
             "instructions": SYSTEM_PROMPT,
-            "input": self.build_user_prompt(private_view),
+            "input": self.build_user_prompt(private_view, retry_error=retry_error),
             "text": {
                 "format": {
                     "type": "json_schema",
