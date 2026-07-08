@@ -1,0 +1,31 @@
+P(s_t, a, s_{t+1})
+
+xxxx
+xxxx
+xxxx
+
+--> a (kb3)
+
+## MDPs
+while game is not over:
+
+    s(t)
+
+    a(t) := ActionChoice()
+
+    according to P(s(t), a(t) --> s(t+1))          // think of this as game resolving itself
+
+    game transitions to s(t+1)
+
+    --> s(t) = s(t+1)
+
+R(s,a) = +1 if position is better, -1 if worse, 0 if neutral
+
+q-learning!!!!!
+
+U*(s) = arg max_{a} R(s, a) + gamma * sum_{s'} { P(s, a, s') * U(s') }
+
+## TRAINING
+
+Q-Loss
+(U(s,a) - Predicted(s,a))^2

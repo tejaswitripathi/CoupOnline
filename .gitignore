@@ -2,3 +2,7 @@
 */__pycache__
 coup-core/*.txt
 .venv
+frontend/public/assets/raw/input.mp4
+frontend/public/assets/raw/tabletop.blend
+frontend/public/assets/raw/tabletop.blend1
+frontend/public/assets/mockups

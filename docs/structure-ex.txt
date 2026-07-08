@@ -1,0 +1,99 @@
+coup/
+├── backend/
+│   ├── coup_core/
+│   │   ├── actions.py
+│   │   ├── cards.py
+│   │   ├── player.py
+│   │   ├── state.py
+│   │   ├── state_stack.py
+│   │   ├── resolver.py
+│   │   └── views.py
+│   │
+│   ├── coup_api/
+│   │   ├── main.py
+│   │   ├── routes.py
+│   │   ├── schemas.py
+│   │   ├── store.py
+│   │   └── websocket.py
+│   │
+│   ├── agents/
+│   │   ├── base.py
+│   │   ├── openai_agent.py
+│   │   ├── anthropic_agent.py
+│   │   ├── gemini_agent.py
+│   │   ├── heuristic_agent.py
+│   │   └── human_agent.py
+│   │
+│   ├── database/
+│   │   ├── mongo.py
+│   │   ├── repositories.py
+│   │   ├── serializers.py
+│   │   └── indexes.py
+│   │
+│   ├── orchestration/
+│   │   ├── match_runner.py
+│   │   ├── experiment_runner.py
+│   │   └── data_logger.py
+│   │
+│   └── analysis/
+│       ├── data_generation.py
+│       ├── data_analysis.py
+│       └── queries.py
+│
+├── frontend/
+│   ├── src/
+│   │   ├── app/
+│   │   ├── pages/
+│   │   │   ├── MainMenu.tsx
+│   │   │   ├── Lobby.tsx
+│   │   │   ├── Game.tsx
+│   │   │   └── Rules.tsx
+│   │   ├── components/
+│   │   │   ├── PlayerPanel.tsx
+│   │   │   ├── CardFan.tsx
+│   │   │   ├── ActionTray.tsx
+│   │   │   ├── ThoughtBubble.tsx
+│   │   │   ├── CoinCounter.tsx
+│   │   │   └── VideoBackground.tsx
+│   │   ├── api/
+│   │   │   ├── client.ts
+│   │   │   └── websocket.ts
+│   │   ├── types/
+│   │   │   └── game.ts
+│   │   └── styles/
+│   │       └── globals.css
+│   │
+│   └── public/
+│       ├── videos/
+│       ├── cards/
+│       ├── icons/
+│       ├── coins/
+│       └── logos/
+│
+├── assets/
+│   ├── raw/
+│   ├── processed/
+│   └── mockups/
+│
+├── docs/
+│   ├── architecture.md
+│   ├── api.md
+│   ├── database.md
+│   ├── ui.md
+│   └── research.md
+│
+├── scripts/
+│   ├── seed_db.py
+│   ├── create_indexes.py
+│   └── run_experiment.py
+│
+├── tests/
+│   ├── test_resolver.py
+│   ├── test_state_transitions.py
+│   ├── test_agents.py
+│   └── test_database.py
+│
+├── .env.example
+├── requirements.txt
+├── package.json
+└── README.md

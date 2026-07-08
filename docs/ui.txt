@@ -1,0 +1,186 @@
+HOW IT LOOKS:
+- tabletop
+- each client starts in a certain state:
+    - 2 possible states:
+        - active
+        - spectating
+    - if active --> client sees private view
+    - if spectating --> client sees full state view
+    - when client is out of cards, they are removed from public view and become a spectator
+- for each active client:
+    - thoughts/chat feature, shows up as black box next to client icon, shows up only when there is a new entry
+        - this is where LLM thoughts show up
+        - client can also type in their own chat box, whatever they put there is public view
+        - spectating clients have no chat box and are ejected from public view
+    - cards view:
+        - client can click the cards, this enlarges both cards
+        - for card selection:
+            - cards automatically enlarge for client; depending on state, client picks 1-2 cards.
+    - actions view:
+        - only the possible actions (including illegal actions but not including impossible actions such as Assassinate when num_coins < 3, etc)
+        - shows each action card
+        - no actions show unless it's the client's turn
+        - only shows response actions if there is space for client to respond to an action
+- for all clients:
+    - discard pile:
+        - appears next to deck
+        - client can click on discard pile and see all the cards in there
+    - deck:
+        - stack of card jpgs, cannot interact with it
+    - coins:
+        - single coin icon with number of coins next to it, appears next to client cards
+    - active players:
+        - show player icons with their names next to them
+    - when a player is out, they become a spectator; active players can no longer see them on the tabletop
+
+- scorebaord box type thing to keep track of player cards and eliminated players
+
+ASSETS:
+- chatGPT icon
+- Claude icon
+- Gemini icon
+- Coup cards (face up & face down)
+    - use this to create deck jpg, hand jpgs, discard pile
+- tabletop jpg
+- player icons
+    - set of icons client can select
+    - 
+- action cards
+    - each card has an icon, effect, and potentially a cost
+    - could be either an action or response; if response then no cost, just effect
+- coin icon
+
+CONSTRUCTION:
+- VIDEO BACKGROUND
+    - <video
+            autoPlay
+            muted
+            loop
+            playsInline
+        />
+    - when a game starts, it must transition to what it looks like in in-game-private-view.png. the engine must 
+        distort the video to make it look like the camera is aimed down at the tabletop
+    - object-fit: cover;
+- ROUTING
+    - we can use React Router
+    /
+        Main Menu
+        /play
+        Lobby
+        /game
+        Gameplay
+        /rules
+        Rules
+        /results
+        Winner
+- COMPONENTS
+    - components/
+        PlayerPanel
+        PlayerIcon
+        CoinCounter
+        ThoughtBubble
+        CardFan
+        ActionPanel
+        ActionCard
+        DiscardPile
+        Deck
+        Scoreboard
+        Popup
+        DialogueBox
+        Notification
+    - with reusable components, each page is just a matter of assembling components
+    - for all components, if a usable asset exists in assets folder, use it
+- GAME SCREEN
+    - <Game>
+        <BackgroundVideo/>
+        <TopBanner/>
+        <Table/>
+        <PlayerPanels/>
+        <ActionTray/>
+        <PrivateHand/>
+        <Notifications/>
+    </Game>
+- PLAYER PANEL (IN GAME)
+    - PlayerIcon
+    - Coins
+    - Cards
+    - Thought Bubble
+        - should animate and disappear, something like:
+            Thinking...
+            ↓
+            typing...
+            ↓
+            message fades in
+            ↓
+            stays 4 sec
+            ↓
+            fades out
+    - Selection Glow
+- CARD INTERACTIONS & ANIMATIONS
+    <Card>
+    front image
+    back image
+    hover animation
+    selection outline
+    flip animation
+    - this way every card in the game uses the same component
+- GAME STATE HANDLING
+    - UI should receive some GameState and be able to derive everything --> UI is "memoryless" and doesn't know the rules of the game
+    - frontend route pages should *not* correspond directly to game phases; this would cause the page to keep changing with every phase change
+    - instead, we'll have something like GameScreen --> GameState --> component visibility
+    - for example:
+        phase == AwaitingAction
+        ↓
+        <ActionTray visible/>
+        phase == AwaitingChallenge
+        ↓
+        <ResponseTray visible/>
+        phase == Waiting
+        ↓
+        everything disabled
+    - this way, the game plays out continuously over one page
+- ANIMATIONS
+    - use Framer Motion for almost everything
+    - player thinking could look like opacity 0 → 1
+    - card enlarge is scale 1.0 -> 2.0
+    - challenge, card loss, coin loss, flip, draw, etc
+- COMMUNICATION
+    - pipeline is FastAPI --> websocket --> React
+    - every time the game engine changes state, we do --> broadcast GameState --> React rerenders
+    - should make spectators work naturally
+
+SCREENS
+- PREGAME SCREEN / LOBBY (after you press "PLAY" in main menu)
+    - Each "+" card is a PlayerCard component
+    - see pregame-menu.png
+    - the "BEGIN" button should be grayed out unless there is at least 1 other player in the lobby
+    - max 4 players, eventually we wanna do up to 6 but for now we keep it at 4
+- RULES
+    - should feel like a codex rather than chunks of text
+    - on the left, have a column with "Influences" and "Actions" buttons
+    - on the right, include description, images, and any animations
+- GAMEPLAY
+    - see above notes
+    - thought/chat box/bubble for player should appear on bottom right of their screen
+    - all active players will only see public thoughts
+    - all spectating players will see public thoughts with private thoughts in parentheses underneath, so like
+        > {public thoughts}
+            ({private thoughts}...) <-- always add ellipsis after private thoughts
+    - ON PLAYER'S TURN (NOT LLM):
+        - player has 60 seconds to pick and complete an action: this means that if an action has a target, they have 60 seconds to pick the action and the target, the timer does not reset simply after an action is picked; 
+            - if they fail to, then the game picks "Income" for them; 
+            - if they fail and have at least the coin limit, then the game picks "Coup" for them instead and picks whichever opponent has the most cards. ties are broken by coin count, and then by player id.
+    - ON RESPONSE:
+        - player has 10 seconds to respond (pass, block, challenge <-- show only whichever responses are legal for the action); if they fail, game picks "pass" for them
+    - prompt shows up as a horizontal card; time limit shows up as reverse progress bar attached to card
+    - game log shows at bottom right (ignore top left in in-game-private-view.png):
+        - {player X}'S TURN.
+        - phase_1
+        - phase_2
+        - show at most 2 phases in current turn, treat this like a phase queue. when there are > 2 phases in the queue, remove the first element, always add phases to the end of the queue; 
+        - always have {player X}'S TURN as the top line.
+    - discard pile
+        - clickable, expands into a grid of card components overlayed on the top middle of the screen
+        - player should still see game log, action prompt, response prompt
+    - leave game button at top left, should end the game and return to the main menu
+        - if player clicks on this, show a box with "Leave the game?" "YES" "NO"; if player clicks YES, it ends the game and returns to main menu

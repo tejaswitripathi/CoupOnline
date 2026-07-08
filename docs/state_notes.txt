@@ -1,0 +1,22 @@
+Game state contains:
+- cards per player
+- number of coins per player
+
+Game state for a player:
+- current acting player
+- player's cards
+- number of cards per player, other players
+- number of coins per player
+- all legal/possible actions
+- all previous game states, incl. previous actions
+
+Game state object:
+state.get_player_state(player_id)
+
+
+
+state_i
+--> action
+--> blocked: 0 | 1
+--> challenged: 0 | 1
+
