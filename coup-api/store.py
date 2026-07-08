@@ -109,6 +109,18 @@ class GameDatabase:
             if p.id != state.acting_player_id and len(p.cards) > 0
         }
 
+    def _card_name(self, card) -> str:
+        return card.name if hasattr(card, "name") else card
+
+    def _player_has_card(self, player: Player, card_name: str) -> bool:
+        return any(self._card_name(card) == card_name for card in player.cards)
+
+    def _is_challengeable(self, record: GameRecord, action_name: str) -> bool:
+        return (
+            action_name in record.resolver.ACTION_CLAIMS
+            or action_name in record.resolver.FORBIDDEN_ACTION_CLAIMS
+        )
+
     def resolve_action(self, game_id: str | None, payload: dict) -> State:
         record = self.get_game(game_id)
         action_name = payload.get("action")
@@ -139,7 +151,7 @@ class GameDatabase:
 
         action = ALL_ACTIONS[action_name]
         blockable = action_name in record.resolver.BLOCK_CLAIMS
-        challengeable = action_name in record.resolver.ACTION_CLAIMS
+        challengeable = self._is_challengeable(record, action_name)
         targeted = action_name in record.resolver.TARGETED_ACTIONS
 
         players = state.get_players_dict()
@@ -150,6 +162,8 @@ class GameDatabase:
             assert player.num_coins >= 7, "Player needs at least 7 coins to coup."
         if action_name == "Assassinate":
             assert player.num_coins >= 3, "Player needs at least 3 coins to assassinate."
+        if action_name == "Foreign Aid":
+            assert not self._player_has_card(player, "Duke"), "Players holding Duke cannot take Foreign Aid."
 
         if targeted:
             target_id = payload.get("target_player_id")
@@ -206,7 +220,7 @@ class GameDatabase:
         assert player_id in state.pending_responses, "Player is not eligible to respond right now"
 
         if response == "challenge":
-            assert action_name in record.resolver.ACTION_CLAIMS, f"{action_name} cannot be challenged"
+            assert self._is_challengeable(record, action_name), f"{action_name} cannot be challenged"
             state.challenged = 1
             state.challenger_id = player_id
             state.pending_responses = set()

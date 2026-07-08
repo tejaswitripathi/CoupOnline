@@ -38,6 +38,9 @@ class StateStack():
             "is_active": len(player.cards) > 0,
         }
 
+    def _player_has_card(self, player, card_name: str) -> bool:
+        return any(self._card_name(card) == card_name for card in player.cards)
+
     def _pending_selection_for_player(self, state: State, player_id: int):
         selections = getattr(state, "pending_selections", [])
         if not selections:
@@ -75,7 +78,8 @@ class StateStack():
             return actions
 
         add_action("Income")
-        add_action("Foreign Aid")
+        if not self._player_has_card(player, "Duke"):
+            add_action("Foreign Aid")
         add_action("Tax")
         add_action("Exchange")
         add_action("Steal", True)
