@@ -6,7 +6,7 @@ except ImportError:
 
 class GPTAgent(CoupLLMAgent):
     provider = "openai"
-    model = "gpt-5.5"
+    model = "gpt-5.4-nano"
 
     def __init__(self, api_key: str | None = None):
         self.api_key = api_key or get_env_value("OPENAI_API_KEY")

@@ -2,6 +2,8 @@ import json
 import os
 from pathlib import Path
 import re
+import socket
+import time
 import urllib.error
 import urllib.request
 
@@ -10,14 +12,15 @@ SYSTEM_PROMPT = """You are playing Coup.
 You only know the private view supplied for your player. Do not assume hidden
 cards for other players. Choose exactly one legal next command from legal_next.
 
-Return only JSON in one of these shapes:
-{"command":"declare","action":"Income"}
-{"command":"declare","action":"Steal","target_player_id":2}
-{"command":"respond","response":"pass"}
-{"command":"respond","response":"challenge"}
-{"command":"respond","response":"block"}
-{"command":"select_card","card":"Duke"}
-{"command":"select_card","keep_cards":["Ambassador","Captain"]}
+Return only JSON in one of these shapes. You may include a "thoughts" field with
+one concise sentence of public strategic rationale:
+{"command":"declare","action":"Income","thoughts":"I need safe coins before taking a risk."}
+{"command":"declare","action":"Steal","target_player_id":2,"thoughts":"This target has coins and may be vulnerable."}
+{"command":"respond","response":"pass","thoughts":"A challenge is too risky here."}
+{"command":"respond","response":"challenge","thoughts":"The claim conflicts with the public action history."}
+{"command":"respond","response":"block","thoughts":"Blocking preserves my influence."}
+{"command":"select_card","card":"Duke","thoughts":"This is the weaker card for my current position."}
+{"command":"select_card","keep_cards":["Ambassador","Captain"],"thoughts":"These cards preserve flexible actions and blocks."}
 {"command":"noop"}
 
 Prefer actions that improve your chance to win, but stay valid for the current
@@ -55,6 +58,7 @@ DECISION_SCHEMA = {
             "type": "array",
             "items": {"type": "string"},
         },
+        "thoughts": {"type": "string"},
     },
     "required": ["command"],
 }
@@ -114,21 +118,39 @@ def get_env_value(key: str) -> str | None:
     return None
 
 
-def _post_json(url: str, payload: dict, headers: dict, timeout: int = 60) -> dict:
+def _post_json(
+    url: str,
+    payload: dict,
+    headers: dict,
+    timeout: int = 180,
+    max_retries: int = 2,
+) -> dict:
     request = urllib.request.Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json", **headers},
         method="POST",
     )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        raise AgentAPIError(f"LLM API returned HTTP {exc.code}: {body}") from exc
-    except urllib.error.URLError as exc:
-        raise AgentAPIError(f"Could not reach LLM API: {exc.reason}") from exc
+
+    last_error = None
+    for attempt in range(max_retries + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            raise AgentAPIError(f"LLM API returned HTTP {exc.code}: {body}") from exc
+        except (TimeoutError, socket.timeout, urllib.error.URLError) as exc:
+            last_error = exc
+            if attempt == max_retries:
+                break
+            time.sleep(2 ** attempt)
+
+    if isinstance(last_error, urllib.error.URLError):
+        detail = last_error.reason
+    else:
+        detail = last_error
+    raise AgentAPIError(f"Could not reach LLM API after {max_retries + 1} attempt(s): {detail}")
 
 
 def _extract_json_object(text: str) -> dict:
@@ -215,11 +237,16 @@ class CoupLLMAgent:
 
     def decide(self, private_view: dict) -> dict:
         raw_output = self._call_model(private_view)
-        decision = normalize_decision(_extract_json_object(raw_output), private_view)
+        raw_decision = _extract_json_object(raw_output)
+        thoughts = raw_decision.get("thoughts")
+        if thoughts is not None and not isinstance(thoughts, str):
+            thoughts = json.dumps(thoughts)
+        decision = normalize_decision(raw_decision, private_view)
         return {
             "provider": self.provider,
             "model": self.model,
             "decision": decision,
+            "thoughts": thoughts,
             "raw_output": raw_output,
         }
 

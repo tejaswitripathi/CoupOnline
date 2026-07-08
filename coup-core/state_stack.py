@@ -100,7 +100,13 @@ class StateStack():
         responses = ["pass"]
         if state.phase in ("AWAITING_CHALLENGE", "AWAITING_BLOCK_OR_CHALLENGE"):
             responses.append("challenge")
-        if state.phase == "AWAITING_BLOCK_OR_CHALLENGE":
+        if (
+            state.phase == "AWAITING_BLOCK_OR_CHALLENGE"
+            and (
+                getattr(state, "pending_action", None) not in ("Steal", "Assassinate")
+                or player_id == getattr(state, "victim_id", None)
+            )
+        ):
             responses.append("block")
         return responses
 

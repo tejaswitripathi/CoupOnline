@@ -6,7 +6,7 @@ except ImportError:
 
 class GeminiAgent(CoupLLMAgent):
     provider = "gemini"
-    model = "gemini-3.5-flash"
+    model = "gemini-3.1-flash-lite"
 
     def __init__(self, api_key: str | None = None):
         self.api_key = api_key or get_env_value("GEMINI_API_KEY")

@@ -1,5 +1,5 @@
 .env
 */__pycache__
 coup-core/*.txt
-agents/gemini-agent.py
-agents/gpt-agent.py
+.venv
+database/*.txt
