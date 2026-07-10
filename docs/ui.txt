@@ -49,17 +49,21 @@ ASSETS:
     - each card has an icon, effect, and potentially a cost
     - could be either an action or response; if response then no cost, just effect
 - coin icon
+- for all assets, remove transparent portion
 
 CONSTRUCTION:
-- VIDEO BACKGROUND
+- VIDEO BACKGROUND ** VERY IMPORTANT **
     - <video
             autoPlay
             muted
             loop
             playsInline
         />
-    - when a game starts, it must transition to what it looks like in in-game-private-view.png. the engine must 
-        distort the video to make it look like the camera is aimed down at the tabletop
+    - when a game starts, it must transition from menu.png to what it looks like in in-game-private-view.png. 
+        - notice how the background is distorted in the latter. 
+        - use perspective shift techniques to make it look like the camera is tilting downwards. 
+        - this *must* be an animation
+        - when the player backs out of this view (i.e. leaves the game), reverse the distortion effect.
     - object-fit: cover;
 - ROUTING
     - we can use React Router
@@ -161,7 +165,7 @@ SCREENS
     - on the right, include description, images, and any animations
 - GAMEPLAY
     - see above notes
-    - thought/chat box/bubble for player should appear on bottom right of their screen
+    - for now, player will not have their own chat box / thought bubble; only LLMs
     - all active players will only see public thoughts
     - all spectating players will see public thoughts with private thoughts in parentheses underneath, so like
         > {public thoughts}
@@ -172,6 +176,7 @@ SCREENS
             - if they fail and have at least the coin limit, then the game picks "Coup" for them instead and picks whichever opponent has the most cards. ties are broken by coin count, and then by player id.
     - ON RESPONSE:
         - player has 10 seconds to respond (pass, block, challenge <-- show only whichever responses are legal for the action); if they fail, game picks "pass" for them
+    - PHASE/STATE DOES NOT MOVE ON UNLESS ALL PLAYERS HAVE RESPONDED/ACTED
     - prompt shows up as a horizontal card; time limit shows up as reverse progress bar attached to card
     - game log shows at bottom right (ignore top left in in-game-private-view.png):
         - {player X}'S TURN.

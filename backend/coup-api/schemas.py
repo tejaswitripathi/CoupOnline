@@ -46,6 +46,7 @@ class SelectCardRequest(GameScopedRequest):
 class AgentDecisionRequest(GameScopedRequest):
     player_id: int
     include_private_view: bool = False
+    data_generation: bool = True
 
 
 class MatchRunRequest(BaseModel):

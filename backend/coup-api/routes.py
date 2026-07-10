@@ -62,11 +62,16 @@ def _get_agent(agent_name: str):
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
-def _agent_decision(agent_name: str, game_id: str | None, player_id: int) -> dict:
+def _agent_decision(
+    agent_name: str,
+    game_id: str | None,
+    player_id: int,
+    data_generation: bool = True,
+) -> dict:
     private_view = _http_assert(lambda: GAME_DB.private_view(game_id, player_id))
     agent = _get_agent(agent_name)
     try:
-        return agent.decide(private_view)
+        return agent.decide(private_view, data_generation=data_generation)
     except AgentAPIError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -113,6 +118,11 @@ async def get_private_view(player_id: int, game_id: str = DEFAULT_GAME_ID):
 @router.get("/states/private-view/{player_id}")
 async def get_private_view_by_path(player_id: int, game_id: str = DEFAULT_GAME_ID):
     return {"success": True, "data": _http_assert(lambda: GAME_DB.private_view(game_id, player_id))}
+
+
+@router.get("/states/observation")
+async def get_observation(game_id: str = DEFAULT_GAME_ID, reveal: bool = False):
+    return {"success": True, "data": _http_assert(lambda: GAME_DB.observation(game_id, reveal))}
 
 
 @router.post("/states/private-view")
@@ -177,7 +187,12 @@ async def list_agents():
 async def agent_decision(agent_name: str, payload: AgentDecisionRequest):
     data = _model_dict(payload)
     private_view = _http_assert(lambda: GAME_DB.private_view(data.get("game_id"), data["player_id"]))
-    result = _agent_decision(agent_name, data.get("game_id"), data["player_id"])
+    result = _agent_decision(
+        agent_name,
+        data.get("game_id"),
+        data["player_id"],
+        data_generation=data.get("data_generation", True),
+    )
     if data.get("include_private_view", False):
         result["private_view"] = private_view
     return {"success": True, "data": result}
@@ -188,7 +203,12 @@ async def agent_act(agent_name: str, payload: AgentDecisionRequest):
     data = _model_dict(payload)
     game_id = data.get("game_id")
     private_view = _http_assert(lambda: GAME_DB.private_view(game_id, data["player_id"]))
-    result = _agent_decision(agent_name, game_id, data["player_id"])
+    result = _agent_decision(
+        agent_name,
+        game_id,
+        data["player_id"],
+        data_generation=data.get("data_generation", True),
+    )
     state = _http_assert(lambda: GAME_DB.dispatch_decision(game_id, data["player_id"], result["decision"]))
     if data.get("include_private_view", False):
         result["private_view"] = private_view

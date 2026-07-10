@@ -275,6 +275,48 @@ class GameDatabase:
     def private_view(self, game_id: str | None, player_id: int) -> dict:
         return self.get_game(game_id).state_stack.private_view({"player_id": player_id})
 
+    def observation(self, game_id: str | None, reveal: bool = False) -> dict:
+        """Spectator-oriented full-board view. Card contents are only included
+        when `reveal` is true (spectator mode); otherwise only counts are shown."""
+        record = self.get_game(game_id)
+        state = record.latest_state()
+        live_player_ids = [p.id for p in state.players if len(p.cards) > 0]
+        pending_selections = getattr(state, "pending_selections", [])
+        pending_selection = None
+        if pending_selections:
+            top = pending_selections[0]
+            pending_selection = {"kind": top.get("kind"), "player_id": top.get("player_id")}
+
+        players = []
+        for player in state.players:
+            entry = {
+                "id": player.id,
+                "num_coins": player.num_coins,
+                "num_cards": len(player.cards),
+                "is_active": len(player.cards) > 0,
+            }
+            if reveal:
+                entry["cards"] = [self._card_name(card) for card in player.cards]
+            players.append(entry)
+
+        return {
+            "game_id": record.id,
+            "turn_id": state.turn_id,
+            "phase": state.phase,
+            "acting_player_id": getattr(state, "acting_player_id", None),
+            "victim_id": getattr(state, "victim_id", None),
+            "pending_action": getattr(state, "pending_action", None),
+            "challenger_id": getattr(state, "challenger_id", None),
+            "blocker_id": getattr(state, "blocker_id", None),
+            "pending_response_player_ids": sorted(list(getattr(state, "pending_responses", set()))),
+            "pending_selection": pending_selection,
+            "discard_pile": list(getattr(state, "discard_pile", [])),
+            "deck_count": len(state.deck or []),
+            "live_player_ids": live_player_ids,
+            "winner_id": live_player_ids[0] if state.phase == "GAME_OVER" and len(live_player_ids) == 1 else None,
+            "players": players,
+        }
+
 
 GAME_DB = GameDatabase()
 
