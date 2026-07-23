@@ -83,7 +83,13 @@ class SQLDatabase:
             mongo_timeout_ms: Server selection timeout for Mongo writes.
         """
         if load_dotenv:
-            load_dotenv(ROOT / ".env")
+            # `.env` may live at the backend dir or the repo root; load the
+            # first one found while walking upward from this file.
+            for parent in (ROOT, *ROOT.parents):
+                env_path = parent / ".env"
+                if env_path.exists():
+                    load_dotenv(env_path)
+                    break
 
         self._last_bigint_id = 0
         self.sqlite_path = str(sqlite_path)

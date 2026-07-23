@@ -1,4 +1,5 @@
 import argparse
+import json
 import sys
 import uuid
 from pathlib import Path
@@ -25,6 +26,8 @@ from store import GAME_DB
 
 N = 25
 DEFAULT_SQLITE_PATH = ROOT / "database" / "coup_generated.sqlite3"
+LOCAL_DATA_DIR = ROOT / "data-analysis" / "data"
+TABLES = ("Game", "State", "Decision", "PlayerSnapshot", "Result")
 
 
 def unique_id(prefix: str) -> str:
@@ -153,6 +156,39 @@ def persist_match(
     }
 
 
+def dump_tables_to_json(
+    sql_db: SQLDatabase,
+    data_dir: str | Path = LOCAL_DATA_DIR,
+) -> dict[str, int]:
+    """Write every table to `data_dir` as one JSON file per table.
+
+    Used as a fallback when the MongoDB sync fails: the rows already live in the
+    local SQLite database, so we read them back out and emit clean JSON with the
+    JSON/boolean columns decoded from their stored representation.
+    """
+    data_dir = Path(data_dir)
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    written: dict[str, int] = {}
+    for table in TABLES:
+        rows = sql_db.table_rows(table)
+        json_columns = sql_db.JSON_COLUMNS.get(table, set())
+        bool_columns = sql_db.BOOL_COLUMNS.get(table, set())
+        for row in rows:
+            for column in json_columns:
+                if isinstance(row.get(column), str):
+                    row[column] = json.loads(row[column])
+            for column in bool_columns:
+                if row.get(column) is not None:
+                    row[column] = bool(row[column])
+
+        path = data_dir / f"{table.lower()}.json"
+        path.write_text(json.dumps(rows, indent=2, default=str))
+        written[table] = len(rows)
+
+    return written
+
+
 def generate_games(
     *,
     num_games: int = N,
@@ -184,30 +220,44 @@ def generate_games(
         if clear:
             sql_db.clear_all(include_mongo=clear_mongo)
 
-        for game_number in range(1, num_games + 1):
-            game_id = unique_id(game_id_prefix)
-            match_result = run_match(
-                game_id=game_id,
-                num_players=len(agent_names),
-                player_agents=player_agents,
-                max_steps=max_steps,
-                include_private_view=True,
-            )
-            summary = persist_match(sql_db, game_id, match_result, experiment_id=experiment_id)
-            summaries.append(summary)
-
-            if not quiet:
-                print(
-                    f"{game_number}/{num_games} saved {summary['game_id']}: "
-                    f"{summary['states']} states, {summary['decisions']} decisions, "
-                    f"winner={summary['winner_id']}; players={', '.join(player_model_names)}",
-                    flush=True,
+        try:
+            for game_number in range(1, num_games + 1):
+                game_id = unique_id(game_id_prefix)
+                match_result = run_match(
+                    game_id=game_id,
+                    num_players=len(agent_names),
+                    player_agents=player_agents,
+                    max_steps=max_steps,
+                    include_private_view=True,
                 )
+                summary = persist_match(sql_db, game_id, match_result, experiment_id=experiment_id)
+                summaries.append(summary)
 
-        if sql_db.last_mongo_error and not require_mongo:
+                if not quiet:
+                    print(
+                        f"{game_number}/{num_games} saved {summary['game_id']}: "
+                        f"{summary['states']} states, {summary['decisions']} decisions, "
+                        f"winner={summary['winner_id']}; players={', '.join(player_model_names)}",
+                        flush=True,
+                    )
+        except Exception:
+            # A require_mongo run raises on the first failed Mongo write; persist
+            # what SQLite already holds to local JSON before propagating.
+            if sql_db.last_mongo_error is not None:
+                _save_local_fallback(sql_db)
+            raise
+
+        if sql_db.last_mongo_error is not None:
             print(f"Warning: MongoDB sync failed: {sql_db.last_mongo_error}", file=sys.stderr)
+            _save_local_fallback(sql_db)
 
     return summaries
+
+
+def _save_local_fallback(sql_db: SQLDatabase) -> None:
+    written = dump_tables_to_json(sql_db)
+    counts = ", ".join(f"{table}={count}" for table, count in written.items())
+    print(f"Saved local JSON fallback to {LOCAL_DATA_DIR} ({counts})", file=sys.stderr)
 
 
 def build_arg_parser() -> argparse.ArgumentParser:

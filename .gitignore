@@ -8,3 +8,6 @@ frontend/public/assets/raw/input.mp4
 frontend/public/assets/raw/tabletop.blend
 frontend/public/assets/raw/tabletop.blend1
 frontend/public/assets/mockups
+backend/database/coup_generated.sqlite3
+backend/database/__pycache__
+backend/data-analysis/__pycache__
