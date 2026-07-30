@@ -23,6 +23,9 @@ Intermediate reward scheme (per LSTM decision, from ground-truth board deltas):
   - LSTM gains coins                     : +COIN_GAIN_REWARD per coin
   - LSTM loses a card                    : LSTM_CARD_LOSS_PENALTY per card
 
+The empirical opponents replay a SQLite dataset; if it is missing locally it is
+downloaded from S3 (see ``ensure_database``) before any game is played.
+
 Run directly:  python train.py
 """
 
@@ -82,6 +85,12 @@ S3_BUCKET = "tejas-blender-bucket"
 S3_KEY = "lstm_agent_best.pt"
 RESULTS_PATH = str(Path(__file__).resolve().parent / "training-results.json")
 
+# The empirical opponents replay decisions from this SQLite dataset; if it is not
+# present locally (e.g. a fresh RunPod VM) it is pulled from S3.
+DB_PATH = BACKEND / "database" / "coup_generated.sqlite3"
+DB_S3_BUCKET = "tejas-coup-bucket"
+DB_S3_KEY = "coup_generated.sqlite3"
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -110,6 +119,28 @@ def download_from_s3(bucket: str, key: str, local_path) -> bool:
     except Exception as exc:  # no object / creds / network -> start fresh
         print(f"[warn] could not fetch s3://{bucket}/{key} ({exc}); starting fresh", flush=True)
         return False
+
+
+def ensure_database(
+    db_path=DB_PATH,
+    bucket: str = DB_S3_BUCKET,
+    key: str = DB_S3_KEY,
+) -> None:
+    """Guarantee the empirical-agent dataset exists locally, fetching it from S3.
+
+    The empirical opponents load this SQLite file at construction, so it must be
+    present before any game is played. Raises if it cannot be obtained.
+    """
+    db_path = Path(db_path)
+    if db_path.exists():
+        return
+
+    print(f"database not found at {db_path}; fetching from s3://{bucket}/{key}", flush=True)
+    if not download_from_s3(bucket, key, db_path) or not db_path.exists():
+        raise RuntimeError(
+            f"Could not obtain the training database. Place it at {db_path} or make "
+            f"s3://{bucket}/{key} accessible (check AWS credentials)."
+        )
 
 
 def load_best_weights(net: LSTMActorCritic, bucket: str, key: str, local_path) -> float:
@@ -326,6 +357,8 @@ def train(
     s3_key: str = S3_KEY,
     resume: bool = True,
 ) -> LSTMActorCritic:
+    ensure_database()
+
     net = LSTMActorCritic(hidden_size=hidden_size).to(device)
     optimizer = optim.Adam(net.parameters(), lr=learning_rate)
     scheduler = CosineAnnealingLR(optimizer, T_max=max(iterations, 1))
