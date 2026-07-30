@@ -11,3 +11,6 @@ frontend/public/assets/mockups
 backend/database/coup_generated.sqlite3
 backend/database/__pycache__
 backend/data-analysis/__pycache__
+backend/orchestration/training/__pycache__
+backend/orchestration/training/*.pt
+backend/orchestration/__pycache__

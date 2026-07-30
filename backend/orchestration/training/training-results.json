@@ -1,0 +1,77 @@
+{
+  "meta": {
+    "opponents": [
+      "easy",
+      "med",
+      "hard"
+    ],
+    "games_per_iter": 500,
+    "gamma": 0.99,
+    "hidden_size": 128,
+    "learning_rate": 0.0003,
+    "metrics": [
+      "win_rate",
+      "policy_loss",
+      "value_loss",
+      "entropy",
+      "lr"
+    ],
+    "best_win_rate": 0.67
+  },
+  "history": [
+    {
+      "iteration": 0,
+      "win_rate": 0.086,
+      "policy_loss": -2.43236044887737,
+      "value_loss": 104.21527560546028,
+      "entropy": 0.8950542224415583,
+      "lr": 0.0002999814948722491,
+      "is_best": true
+    },
+    {
+      "iteration": 1,
+      "win_rate": 0.382,
+      "policy_loss": -0.6451923207451185,
+      "value_loss": 147.5579800370668,
+      "entropy": 0.7388748666417319,
+      "lr": 0.0002999259840548597,
+      "is_best": true
+    },
+    {
+      "iteration": 2,
+      "win_rate": 0.55,
+      "policy_loss": -0.5640477966744796,
+      "value_loss": 128.69969082142626,
+      "entropy": 0.13485926590934452,
+      "lr": 0.0002998334812442955,
+      "is_best": true
+    },
+    {
+      "iteration": 3,
+      "win_rate": 0.67,
+      "policy_loss": -0.4416336534298617,
+      "value_loss": 117.74435716759551,
+      "entropy": 0.23409398041911864,
+      "lr": 0.0002997040092642407,
+      "is_best": true
+    },
+    {
+      "iteration": 4,
+      "win_rate": 0.538,
+      "policy_loss": -21.2853035926719,
+      "value_loss": 144.28169520085996,
+      "entropy": 0.11476628126754033,
+      "lr": 0.00029953760005996916,
+      "is_best": false
+    },
+    {
+      "iteration": 5,
+      "win_rate": 0.358,
+      "policy_loss": -1404.8553032831264,
+      "value_loss": 140.5599098708355,
+      "entropy": 0.006501969577184263,
+      "lr": 0.000299334294690462,
+      "is_best": false
+    }
+  ]
+}

@@ -71,6 +71,9 @@ def _agent_classes():
     from claude_agent import ClaudeAgent
     from gemini_agent import GeminiAgent
     from gpt_agent import GPTAgent
+    from easy1 import EmpiricalClaudeAgent
+    from med1 import EmpiricalGPTAgent
+    from hard1 import EmpiricalGeminiAgent
 
     return {
         "gpt": GPTAgent,
@@ -79,6 +82,13 @@ def _agent_classes():
         "claude": ClaudeAgent,
         "anthropic": ClaudeAgent,
         "random": RandomAgent,
+        "empirical": EmpiricalClaudeAgent,
+        "claude-empirical": EmpiricalClaudeAgent,
+        "easy": EmpiricalClaudeAgent,
+        "gpt-empirical": EmpiricalGPTAgent,
+        "med": EmpiricalGPTAgent,
+        "gemini-empirical": EmpiricalGeminiAgent,
+        "hard": EmpiricalGeminiAgent,
     }
 
 

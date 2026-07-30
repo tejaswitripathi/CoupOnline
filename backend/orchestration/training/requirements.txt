@@ -1,0 +1,15 @@
+# Frozen dependencies for the LSTM Coup training job (RunPod VM).
+# Install with:  pip install -r requirements.txt
+#
+# On a CUDA RunPod image, the default PyPI torch 2.1.2 wheel (linux x86_64) is
+# the CUDA 12.1 build and will use the GPU automatically. For a different CUDA
+# runtime, install torch from the matching index, e.g.:
+#   pip install torch==2.1.2 --index-url https://download.pytorch.org/whl/cu118
+#
+# numpy is pinned to the 1.x line: torch 2.1.2 is built against NumPy 1.x, and
+# NumPy 2.x only emits a compatibility warning here, so 1.26.4 keeps it clean.
+
+torch==2.1.2
+numpy==1.26.4
+boto3==1.43.15
+botocore==1.43.15
