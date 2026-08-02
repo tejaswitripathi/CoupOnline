@@ -81,7 +81,7 @@ SELF_PAY_AMOUNTS = (3, 7)
 OPPONENTS = ["easy", "med", "hard"]
 
 # Where the best checkpoint is mirrored, and where per-iteration metrics land.
-S3_BUCKET = "tejas-blender-bucket"
+S3_BUCKET = "tejas-coup-bucket"
 S3_KEY = "lstm_agent_best.pt"
 RESULTS_PATH = str(Path(__file__).resolve().parent / "training-results.json")
 
