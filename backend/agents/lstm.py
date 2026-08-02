@@ -60,7 +60,7 @@ def masked_categorical(logits: torch.Tensor, mask: torch.Tensor) -> torch.distri
 
 
 class LSTMActorCritic(nn.Module):
-    def __init__(self, hidden_size: int = 128, encoder: FeatureEncoder | None = None):
+    def __init__(self, hidden_size: int = 256, encoder: FeatureEncoder | None = None):
         super().__init__()
         self.encoder = encoder or FeatureEncoder()
         self.hidden_size = hidden_size
@@ -73,6 +73,10 @@ class LSTMActorCritic(nn.Module):
         )
         self.shared_mlp = nn.Sequential(
             nn.Linear(2 * hidden_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
             nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
